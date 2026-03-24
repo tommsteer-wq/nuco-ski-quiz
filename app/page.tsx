@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 type SkiType = "chalet" | "apres" | "junkie" | "tourist" | "student";
 type Screen = "welcome" | "quiz" | "results";
@@ -170,14 +171,21 @@ export default function Home() {
     if (!email || !topResult) return;
     setSubmitStatus("loading");
     try {
-      const res = await fetch("/api/submit", {
+      // Save to Supabase from the browser
+      const { error: dbError } = await supabase.from("ski_quiz_results").insert({
+        email,
+        personality_type: topResult,
+      });
+      if (dbError) throw new Error(dbError.message);
+
+      // Send confirmation email via API
+      await fetch("/api/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, personalityType: topResult }),
+        body: JSON.stringify({ email }),
       });
-      if (!res.ok) throw new Error("Request failed");
-      const data = await res.json();
-      setSubmitResult(data.status);
+
+      setSubmitResult("new");
       setSubmitStatus("success");
     } catch {
       setSubmitStatus("error");

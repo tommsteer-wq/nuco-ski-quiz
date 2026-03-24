@@ -1,34 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
 import { Resend } from "resend";
 
 export async function POST(request: NextRequest) {
   const resend = new Resend(process.env.RESEND_API_KEY);
-  const { email, personalityType } = await request.json();
+  const { email } = await request.json();
 
-  if (!email || !personalityType) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  if (!email) {
+    return NextResponse.json({ error: "Missing email" }, { status: 400 });
   }
-
-  const { data: existing } = await supabase
-    .from("ski_quiz_results")
-    .select("id")
-    .eq("email", email)
-    .limit(1);
-
-  const isNew = !existing || existing.length === 0;
-
-  const { error } = await supabase.from("ski_quiz_results").insert({
-    email,
-    personality_type: personalityType,
-  });
-
-  if (error) {
-    return NextResponse.json({ error: "Failed to save results" }, { status: 500 });
-  }
-
-  let emailSent = false;
-  let emailErrorMsg = null;
 
   try {
     const { error: emailError } = await resend.emails.send({
@@ -41,19 +20,13 @@ export async function POST(request: NextRequest) {
       `,
     });
     if (emailError) {
-      emailErrorMsg = emailError.message;
-      console.error("Resend returned error:", emailError);
-    } else {
-      emailSent = true;
+      console.error("Resend error:", emailError);
+      return NextResponse.json({ emailSent: false, emailError: emailError.message });
     }
+    return NextResponse.json({ emailSent: true });
   } catch (err) {
-    emailErrorMsg = err instanceof Error ? err.message : String(err);
-    console.error("Resend threw exception:", emailErrorMsg);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("Resend exception:", msg);
+    return NextResponse.json({ emailSent: false, emailError: msg });
   }
-
-  return NextResponse.json({
-    status: isNew ? "new" : "existing",
-    emailSent,
-    emailError: emailErrorMsg,
-  });
 }
